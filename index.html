@@ -78,7 +78,7 @@
     <script>
         // Backend Vercel: ganti URL ini setelah deploy backend.
         // Jangan pernah memasukkan API key rahasia di file HTML publik.
-        const API_ENDPOINT = "https://GANTI-DENGAN-DOMAIN-VERCEL-MAS/api/chat";
+        const API_ENDPOINT = location.hostname.endsWith(".vercel.app") ? "/api/chat" : "https://GANTI-DENGAN-DOMAIN-VERCEL-MAS/api/chat";
         
         const chatBox = document.getElementById('chat-box');
         const userInput = document.getElementById('user-input');
