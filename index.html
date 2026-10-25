@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edhy Robot - Smart AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
+        /* Mengurangi tinggi container agar tidak tertutup kolom input */
+        .chat-container { height: calc(100vh - 145px); overflow-y: auto; scroll-behavior: smooth; }
+        
+        .message-bot img { max-width: 100%; border-radius: 8px; object-fit: cover; margin-top: 8px; }
+        .message-bot iframe { width: 100%; height: 210px; border-radius: 8px; margin-top: 8px; border: none; }
+        
+        /* Animasi berfikir / loading */
+        .thinking { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 
+            0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 rgba(79,70,229,0); } 
+            50% { opacity: 0.8; transform: scale(1.05); box-shadow: 0 0 15px rgba(79,70,229,0.6); } 
+        }
+
+        /* Menyembunyikan scrollbar bawaan agar rapi */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-700 z-10 shadow-md">
+        <div class="flex items-center gap-3">
+            <div id="bot-icon" class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center font-bold text-xl transition-all duration-300">🤖</div>
+            <div>
+                <h1 class="font-bold text-lg">Edhy Robot</h1>
+                <p id="bot-status" class="text-xs text-emerald-400 flex items-center gap-1 transition-colors duration-300">
+                    <span id="status-dot" class="w-2 h-2 bg-emerald-400 rounded-full inline-block"></span> 
+                    <span id="status-text">Sistem Online</span>
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Filter Pencarian (Database Sources) -->
+    <div class="bg-slate-900 border-b border-slate-700 px-4 py-2 overflow-x-auto whitespace-nowrap flex gap-2 no-scrollbar">
+        <button onclick="setFilter('Semua Web', this)" class="filter-btn px-3 py-1 bg-indigo-600 text-white text-xs rounded-full border border-indigo-500 transition">Semua Web</button>
+        <button onclick="setFilter('YouTube', this)" class="filter-btn px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full border border-slate-700 hover:bg-slate-700 transition">YouTube</button>
+        <button onclick="setFilter('TikTok', this)" class="filter-btn px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full border border-slate-700 hover:bg-slate-700 transition">TikTok</button>
+        <button onclick="setFilter('X', this)" class="filter-btn px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full border border-slate-700 hover:bg-slate-700 transition">X / Twitter</button>
+        <button onclick="setFilter('GitHub', this)" class="filter-btn px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full border border-slate-700 hover:bg-slate-700 transition">GitHub</button>
+        <button onclick="setFilter('Reddit', this)" class="filter-btn px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full border border-slate-700 hover:bg-slate-700 transition">Reddit</button>
+        <button onclick="setFilter('Scholar', this)" class="filter-btn px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full border border-slate-700 hover:bg-slate-700 transition">Scholar</button>
+        <button onclick="setFilter('News', this)" class="filter-btn px-3 py-1 bg-slate-800 text-slate-300 text-xs rounded-full border border-slate-700 hover:bg-slate-700 transition">News</button>
+    </div>
+
+    <!-- Area Obrolan -->
+    <main id="chat-box" class="chat-container p-4 flex flex-col gap-4 pb-10">
+        <div class="flex flex-col gap-1 items-start w-full max-w-[85%]">
+            <span class="text-xs text-slate-400 ml-1">Edhy Robot</span>
+            <div class="bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-700 text-sm message-bot shadow-sm">
+                Halo! Saya Edhy Robot yang telah diperbarui. Silakan pilih sumber pencarian di atas, dan ketikkan pertanyaan Anda.
+            </div>
+        </div>
+    </main>
+
+    <!-- Area Input Pesan -->
+    <footer class="p-4 bg-slate-900 border-t border-slate-700 absolute bottom-0 w-full z-10">
+        <div class="flex gap-2 relative max-w-3xl mx-auto">
+            <input type="text" id="user-input" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 text-sm text-white placeholder-slate-400" placeholder="Tanyakan sesuatu ke Edhy Robot..." onkeypress="if(event.key === 'Enter') sendMessage()">
+            <button onclick="sendMessage()" class="p-3 bg-indigo-600 rounded-xl hover:bg-indigo-500 transition font-bold text-white flex items-center justify-center min-w-[50px] shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" /></svg>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        // =========================================================================
+        // MASUKKAN API KEY ANDA DI BAWAH INI (Ganti teks di dalam tanda kutip)
+        // =========================================================================
+        const API_KEY = "ISI_DENGAN_API_KEY_ANDA_DISINI"; 
+        
+        const chatBox = document.getElementById('chat-box');
+        const userInput = document.getElementById('user-input');
+        const botIcon = document.getElementById('bot-icon');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('status-dot');
+        const botStatus = document.getElementById('bot-status');
+        
+        let currentFilter = 'Semua Web';
+
+        // Fungsi untuk mengganti tombol sumber pencarian yang aktif
+        function setFilter(filterName, btnElement) {
+            currentFilter = filterName;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-500');
+                btn.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-700');
+            });
+            btnElement.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-700');
+            btnElement.classList.add('bg-indigo-600', 'text-white', 'border-indigo-500');
+        }
+
+        // Fungsi untuk animasi berfikir
+        function setThinking(isThinking) {
+            if (isThinking) {
+                botIcon.classList.add('thinking');
+                statusText.innerText = 'Sedang berfikir...';
+                statusDot.classList.replace('bg-emerald-400', 'bg-indigo-400');
+                botStatus.classList.replace('text-emerald-400', 'text-indigo-400');
+                statusDot.classList.add('animate-pulse');
+            } else {
+                botIcon.classList.remove('thinking');
+                statusText.innerText = 'Sistem Online';
+                statusDot.classList.replace('bg-indigo-400', 'bg-emerald-400');
+                botStatus.classList.replace('text-indigo-400', 'text-emerald-400');
+                statusDot.classList.remove('animate-pulse');
+            }
+        }
+
+        // Fungsi untuk menampilkan pesan ke layar
+        function appendMessage(sender, text, isMarkdown = false) {
+            const div = document.createElement('div');
+            div.className = `flex flex-col gap-1 w-full max-w-[85%] ${sender === 'user' ? 'items-end self-end' : 'items-start'}`;
+            
+            let content = text;
+            if (isMarkdown && sender === 'bot') {
+                // Cegat link YouTube dan ubah jadi Iframe sebelum di-render
+                const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g;
+                content = text.replace(ytRegex, (match, videoId) => {
+                    return `<iframe src="https://www.youtube.com/embed/${videoId}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+                });
+                
+                // Terjemahkan Markdown menjadi HTML (gambar, tebal, dll)
+                content = marked.parse(content);
+            }
+
+            div.innerHTML = `
+                <span class="text-xs text-slate-400 ${sender === 'user' ? 'mr-1' : 'ml-1'}">${sender === 'user' ? 'Anda' : 'Edhy Robot'}</span>
+                <div class="${sender === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800 border border-slate-700 text-slate-100 rounded-tl-none message-bot'} p-3 rounded-2xl text-sm break-words shadow-sm">
+                    ${content}
+                </div>
+            `;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return div;
+        }
+
+        // Fungsi utama mengirim pesan ke AI
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            if (API_KEY === "ISI_DENGAN_API_KEY_ANDA_DISINI" || API_KEY === "") {
+                appendMessage('bot', '⚠️ **Error:** Anda belum memasukkan API Key di dalam kode HTML. Silakan edit file HTML dan masukkan kunci rahasia Anda pada baris `const API_KEY`.', true);
+                return;
+            }
+
+            appendMessage('user', text);
+            userInput.value = '';
+            setThinking(true);
+
+            const loadingBubble = appendMessage('bot', 'Edhy Robot sedang berfikir...');
+            
+            // Tambahkan instruksi filter pencarian secara diam-diam (rahasia)
+            let finalQuery = text;
+            if (currentFilter !== 'Semua Web') {
+                if (currentFilter === 'YouTube') finalQuery += " (Tolong cari informasi ini secara spesifik dari YouTube dan berikan link videonya jika ada)";
+                else if (currentFilter === 'TikTok') finalQuery += " (Cari referensi khusus di tiktok.com)";
+                else if (currentFilter === 'GitHub') finalQuery += " (Cari khusus untuk kode dan repositori di github.com)";
+                else if (currentFilter === 'Reddit') finalQuery += " (Cari opini dan diskusi dari reddit.com)";
+                else if (currentFilter === 'Scholar') finalQuery += " (Cari jurnal, paper akademis, atau buku di Google Scholar)";
+                else if (currentFilter === 'News') finalQuery += " (Carikan berita terbaru dan terkini hari ini)";
+                else if (currentFilter === 'X') finalQuery += " (Cari info yang sedang viral di twitter.com atau X)";
+            }
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        system_instruction: {
+                            parts: [{ text: "Kamu adalah 'Edhy Robot', asisten AI canggih dan pintar. Kamu bisa memberikan link youtube, merender gambar, dan mencari informasi real-time di internet. Jawablah menggunakan bahasa Indonesia yang santai tapi sopan." }]
+                        },
+                        contents: [{ parts: [{ text: finalQuery }] }],
+                        tools: [{ google_search: {} }] // Aktifkan Google Search Grounding
+                    })
+                });
+
+                const data = await response.json();
+                chatBox.removeChild(loadingBubble);
+
+                if (data.error) throw new Error(data.error.message);
+
+                const botReply = data.candidates[0].content.parts[0].text;
+                appendMessage('bot', botReply, true);
+
+            } catch (error) {
+                chatBox.removeChild(loadingBubble);
+                appendMessage('bot', `⚠️ **Terjadi kesalahan koneksi:** ${error.message}`, true);
+            } finally {
+                setThinking(false);
+            }
+        }
+
+        // Hapus (sembunyikan) gambar jika linknya mati atau gagal dimuat (Error 404)
+        document.addEventListener('error', function(e) {
+            if (e.target.tagName.toLowerCase() === 'img') {
+                e.target.style.display = 'none';
+            }
+        }, true);
+    </script>
+</body>
+</html>
