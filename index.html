@@ -397,8 +397,22 @@ details.more > summary { cursor: pointer; color: var(--muted); padding: 6px 2px;
         if (v) prefs.sources.push(s.id);
       }));
     });
-    p.appendChild(mk("h3", "", "Mesin AI gratis"));
-    p.appendChild(mk("div", "none", "Tanpa kunci pun jawaban AI jalan lewat Pollinations. Tempel kunci gratis di bawah untuk jawaban lebih cepat dan lengkap; semua mesin yang terisi dipakai bersamaan dan jawaban tercepat yang tampil. Kunci hanya disimpan di perangkat ini."));
+    p.appendChild(mk("h3", "", "Koneksi AI + pencarian web"));
+    p.appendChild(mk("div", "none", "Untuk jawaban berbasis web terbaru, hubungkan backend Edhy yang sudah dipasang di Vercel. Alamat backend disimpan hanya di perangkat ini. Jangan tempel API key Gemini di sini."));
+    var backendInput = mk("input");
+    backendInput.type = "url"; backendInput.autocomplete = "url";
+    backendInput.placeholder = "https://nama-proyek.vercel.app/api/chat";
+    backendInput.setAttribute("aria-label", "Alamat backend AI Edhy");
+    backendInput.value = readJSON(BKEY, "");
+    backendInput.addEventListener("change", function () {
+      var value = backendInput.value.trim().replace(/\/$/, "");
+      writeJSON(BKEY, value);
+      toast(value ? "Alamat backend disimpan" : "Alamat backend dihapus");
+    });
+    p.appendChild(backendInput);
+    p.appendChild(mk("div", "none", "Alur utama: pertanyaan → Google Search → jawaban AI → tautan sumber. Jika backend belum disetel atau gagal, Edhy mencoba mesin AI cadangan yang tersedia."));
+    p.appendChild(mk("h3", "", "Mesin AI cadangan"));
+    p.appendChild(mk("div", "none", "Kunci mesin cadangan disimpan di perangkat ini. Untuk keamanan, gunakan backend untuk Gemini dan jangan pernah memasukkan kunci rahasia ke kode publik."));
     PROVIDERS.forEach(function (pr) {
       var w = mk("div", "kv"), cur = keys[pr.id] || {};
       var a = mk("a", "lnk", "Ambil kunci " + pr.name + " (gratis)"); a.href = pr.url; a.target = "_blank"; a.rel = "noopener noreferrer";
@@ -452,6 +466,7 @@ details.more > summary { cursor: pointer; color: var(--muted); padding: 6px 2px;
   }
 
   var KKEY = "martaedhyx.v2.keys";
+  var BKEY = "martaedhyx.v2.backend";
   var keys = readJSON(KKEY, {});
   if (!keys || typeof keys !== "object") keys = {};
   var state = { images: [], files: [], place: null };
@@ -570,19 +585,58 @@ details.more > summary { cursor: pointer; color: var(--muted); padding: 6px 2px;
         return raceProviders(prompt, signal, urls);
       }).then(function (r) { out.textContent = r.text; lab.textContent = "Jawaban AI · " + r.name; });
     }
-    return getSample().then(function (sample) {
-      if (!sample) return viaProviders();
-      var canImg = sample.limits ? sample.limits().then(function (l) { return !!(l && l.images); }, function () { return false; }) : Promise.resolve(false);
-      return canImg.then(function (ok) {
-        if (att.images.length && !ok) return viaProviders();
-        var opts = { modelTier: "quick", cache: false, signal: signal, onText: function (t) { out.textContent = t.text; } };
-        if (att.images.length) opts.images = att.images.map(function (im) { return im.blob; });
-        return sample(prompt, opts).then(function (r) { if (r && r.text) out.textContent = r.text; })
-          .catch(function (e) { if (signal.aborted) throw e; return viaProviders(); });
+    function viaBackend() {
+      var endpoint = readJSON(BKEY, "");
+      if (!endpoint && /(^|\\.)vercel\\.app$/i.test(location.hostname)) endpoint = "/api/chat";
+      if (!endpoint) return Promise.reject(new Error("Alamat backend belum diatur"));
+      return fetch(endpoint, {
+        method: "POST", signal: signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: q,
+          filter: "Semua Web",
+          context: ctx.slice(0, 12).map(function (c) {
+            return { title: String(c.title || "").slice(0, 240), snippet: String(c.meta || "").slice(0, 500), url: safeUrl(c.url), source: String(c.src || "").slice(0, 80) };
+          })
+        })
+      }).then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) throw new Error(d && d.error ? d.error : "Backend AI gagal (HTTP " + r.status + ")");
+          return d;
+        });
+      }).then(function (d) {
+        if (!d || !d.answer) throw new Error("Backend tidak mengembalikan jawaban");
+        out.textContent = d.answer;
+        lab.textContent = "Jawaban AI · Gemini + Google Search";
+        var cited = ctx.slice();
+        (Array.isArray(d.sources) ? d.sources : []).forEach(function (s) {
+          if (s && s.title && safeUrl(s.url) && !cited.some(function (c) { return c.url === s.url; })) {
+            cited.push({ src: "Google Search", title: s.title, url: s.url, meta: "" });
+          }
+        });
+        addCites(box, cited.slice(0, 20));
+        addActions(box, out);
       });
-    }).then(function () { addCites(box, ctx); addActions(box, out); }).catch(function () {
+    }
+    function viaLegacyAI() {
+      return getSample().then(function (sample) {
+        if (!sample) return viaProviders();
+        var canImg = sample.limits ? sample.limits().then(function (l) { return !!(l && l.images); }, function () { return false; }) : Promise.resolve(false);
+        return canImg.then(function (ok) {
+          if (att.images.length && !ok) return viaProviders();
+          var opts = { modelTier: "quick", cache: false, signal: signal, onText: function (t) { out.textContent = t.text; } };
+          if (att.images.length) opts.images = att.images.map(function (im) { return im.blob; });
+          return sample(prompt, opts).then(function (r) { if (r && r.text) out.textContent = r.text; })
+            .catch(function (e) { if (signal.aborted) throw e; return viaProviders(); });
+        });
+      }).then(function () { addCites(box, ctx); addActions(box, out); });
+    }
+    return viaBackend().catch(function () {
       if (signal.aborted) return;
-      out.textContent = "Jawaban AI belum bisa dibuat. Periksa koneksi, atau tempel kunci gratis lewat tombol + lalu coba lagi.";
+      return viaLegacyAI();
+    }).catch(function () {
+      if (signal.aborted) return;
+      out.textContent = "Jawaban AI belum bisa dibuat. Periksa alamat backend dan konfigurasi GEMINI_API_KEY di Vercel, atau coba mesin AI cadangan.";
       addCites(box, ctx);
     });
   }
