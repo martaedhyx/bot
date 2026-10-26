@@ -21,3 +21,8 @@ If you want to keep using GitHub Pages for the frontend, replace `API_ENDPOINT` 
 - Google Search grounding searches public web information; it is not a private or universal database and may not access content behind logins or paywalls.
 - API usage limits and charges depend on Google's current plan and usage. Check your Google AI Studio project before relying on it for continuous use.
 - This is an AI chat plus live-search grounding foundation, not yet a fully autonomous agent that can safely operate other accounts, devices, or websites. Add individual tools with explicit permissions and confirmation before consequential actions.
+
+
+## Connect GitHub Pages to the live-search backend
+
+If the frontend stays on GitHub Pages, deploy this repository to Vercel, configure `GEMINI_API_KEY` in Vercel Environment Variables, redeploy, then open the app and set the full Vercel `/api/chat` URL under **+ → Sumber dan mesin AI → Alamat backend AI Edhy**. The URL is saved locally in that browser. Never place the Gemini key in public HTML.
