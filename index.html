@@ -587,7 +587,7 @@ details.more > summary { cursor: pointer; color: var(--muted); padding: 6px 2px;
     }
     function viaBackend() {
       var endpoint = readJSON(BKEY, "");
-      if (!endpoint && /(^|\\.)vercel\\.app$/i.test(location.hostname)) endpoint = "/api/chat";
+      if (!endpoint && /(^|\.)vercel\.app$/i.test(location.hostname)) endpoint = "/api/chat";
       if (!endpoint) return Promise.reject(new Error("Alamat backend belum diatur"));
       return fetch(endpoint, {
         method: "POST", signal: signal,
