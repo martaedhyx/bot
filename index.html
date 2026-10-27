@@ -631,12 +631,18 @@ details.more > summary { cursor: pointer; color: var(--muted); padding: 6px 2px;
         });
       }).then(function () { addCites(box, ctx); addActions(box, out); });
     }
-    return viaBackend().catch(function () {
+    var backendError = "";
+    return viaBackend().catch(function (err) {
       if (signal.aborted) return;
+      backendError = err && err.message ? String(err.message).slice(0, 300) : "Backend tidak merespons";
       return viaLegacyAI();
-    }).catch(function () {
+    }).catch(function (fallbackErr) {
       if (signal.aborted) return;
-      out.textContent = "Jawaban AI belum bisa dibuat. Periksa alamat backend dan konfigurasi GEMINI_API_KEY di Vercel, atau coba mesin AI cadangan.";
+      var fallbackMessage = fallbackErr && fallbackErr.message ? String(fallbackErr.message).slice(0, 240) : "mesin AI cadangan gagal";
+      out.textContent = "Jawaban AI belum bisa dibuat. " +
+        (backendError ? "Error backend: " + backendError + ". " : "Backend tidak memberikan jawaban. ") +
+        "Error mesin cadangan: " + fallbackMessage +
+        ". Periksa konfigurasi GEMINI_API_KEY di Vercel.";
       addCites(box, ctx);
     });
   }
